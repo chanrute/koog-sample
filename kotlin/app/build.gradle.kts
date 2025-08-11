@@ -11,6 +11,9 @@ plugins {
 
     // Apply the application plugin to add support for building a CLI application in Java.
     application
+
+    // Add Kotlin serialization plugin for Koog API support
+    kotlin("plugin.serialization") version "2.2.0"
 }
 
 repositories {
@@ -33,8 +36,37 @@ dependencies {
 
     // This dependency is used by the application.
     implementation(libs.guava)
-    // Koog
+
+        // Koog - Core framework
     implementation("ai.koog:koog-agents:0.3.0")
+    implementation("ai.koog:embeddings-llm:0.3.0")
+    implementation("ai.koog:embeddings-base:0.3.0")
+    implementation("ai.koog:rag-base:0.3.0")
+    implementation("ai.koog:vector-storage:0.3.0")
+
+    // Koog Prompt API and LLM clients
+    implementation("ai.koog:prompt-executor-anthropic-client:0.3.0")
+    implementation("ai.koog:prompt-executor-openai-client:0.3.0")
+    implementation("ai.koog:prompt-llm:0.3.0")
+    implementation("ai.koog:prompt-model:0.3.0")
+
+    // Environment variables support
+    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
+
+    // HTTP client for PDF download and API calls
+    implementation("io.ktor:ktor-client-core:2.3.7")
+    implementation("io.ktor:ktor-client-cio:2.3.7")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+
+    // JSON serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+
+    // PDF processing
+    implementation("org.apache.pdfbox:pdfbox:3.0.1")
+
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
 
 // Apply a specific Java toolchain to ease working on different environments.

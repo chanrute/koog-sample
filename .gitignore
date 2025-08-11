@@ -807,3 +807,6 @@ FodyWeavers.xsd
 
 # Ignore Gradle build output directory
 build
+
+# Claude Code
+.claude
