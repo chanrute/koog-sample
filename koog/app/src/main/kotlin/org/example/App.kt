@@ -7,14 +7,10 @@ import ai.koog.agents.core.dsl.builder.forwardTo
 import ai.koog.agents.core.dsl.builder.strategy
 import ai.koog.agents.core.agent.entity.createStorageKey
 import ai.koog.agents.core.tools.ToolRegistry
-import ai.koog.agents.core.dsl.extension.nodeExecuteTool
-import ai.koog.agents.core.dsl.extension.nodeLLMSendToolResult
 import ai.koog.prompt.executor.llms.all.simpleOpenAIExecutor
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonPrimitive
 
 // Koog Structured Data API
 import ai.koog.prompt.structure.json.JsonStructuredData
@@ -320,7 +316,6 @@ class PdfRagApp {
             val cookingMinutes = try {
                 if (response is Message.Tool.Call && response.tool == "sumMinutes") {
                     // SumMinutesArgsをKotlinxシリアライゼーションでデシリアライズ
-                    println("tool response: $response")
                     val sumArgs = Json.decodeFromString<SumMinutesArgs>(response.content)
                     
                     // CalculateToolを実際に実行して結果を取得
@@ -395,7 +390,7 @@ fun main() {
         val app = PdfRagApp()
         val apiKey = app.getOpenAiApiKey()
         // PDFファイルをURLで指定
-        val pdfUrl = "https://kyushucgc.co.jp/recipe_pdf/202112/recipe05.pdf"
+        val pdfUrl = "https://www.pref.aichi.jp/kenmin/shohiseikatsu/education/pdf/student_guide.pdf"
 
         try {
             // Koogエージェント設定
