@@ -11,6 +11,10 @@ import ai.koog.prompt.executor.llms.all.simpleOpenAIExecutor
 import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.Attachment
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.agents.core.agent.singleRunStrategy
+import ai.koog.prompt.params.LLMParams
 
 // Koog Structured Data API
 import ai.koog.prompt.structure.json.JsonStructuredData
@@ -186,7 +190,7 @@ class PdfRagApp {
 
             try {
                 val pdfBytes = pdfService.downloadPdf(pdfUrl.url)
-                val extractedText = pdfService.extractTextFromPdf(pdfBytes)
+                val imageBytes = pdfService.convertPdfToImage(pdfBytes)
 
                 // Koogの構造化出力でPDF判定
                 val validationStructure = JsonStructuredData.createJsonStructure<PdfValidationResult>(
@@ -195,24 +199,42 @@ class PdfRagApp {
                     schemaType = JsonStructuredData.JsonSchemaType.SIMPLE
                 )
 
-                val agent = AIAgent(
-                    executor = simpleOpenAIExecutor(getOpenAiApiKey()),
-                    systemPrompt = """
+                // プロンプトに画像を含めて実行
+                val promptWithImage = prompt("validation-with-image", LLMParams(temperature = 0.0)) {
+                    system("""
                         あなたは料理レシピの専門家です。
-                        提供された文書が料理のレシピに関する内容かどうかを判断してください。
+                        添付された画像を確認して、この文書が料理のレシピに関する内容かどうかを判断してください。
                         
                         判断基準:
                         - 料理名、材料、作り方、調理時間などが含まれているか
                         - 料理に関する情報が主な内容となっているか
+                       
+                        JSON以外のレスポンスを返却することは禁止されています。
                         
-                        レスポンスは必ず日本語で理由を記載してください。
                         以下のJSON構造で正確に出力してください：
+                        `reason`は必ず日本語で理由を記載してください。
+                        
                         ${validationStructure.schema}
-                    """.trimIndent(),
-                    llmModel = OpenAIModels.Chat.GPT4o
-                )
+                    """.trimIndent())
+                    
+                    user {
+                        +"添付された画像から、料理のレシピに関する情報が含まれているかを判定してください。"
+                        
+                        attachments {
+                            image(
+                                Attachment.Image(
+                                    content = AttachmentContent.Binary.Bytes(imageBytes),
+                                    format = "png",
+                                    fileName = "pdf_page.png"
+                                )
+                            )
+                        }
+                    }
+                }
 
-                val result = agent.run("以下の文書内容から、料理のレシピに関する情報が含まれているかを判定してください：\n\n【文書内容】\n$extractedText")
+                val executor = simpleOpenAIExecutor(getOpenAiApiKey())
+                val response = executor.execute(promptWithImage, OpenAIModels.Chat.GPT4o, emptyList())
+                val result = response.first().content
                 
                 println("🔍 LLMレスポンス: $result")
 
@@ -390,7 +412,7 @@ fun main() {
         val app = PdfRagApp()
         val apiKey = app.getOpenAiApiKey()
         // PDFファイルをURLで指定
-        val pdfUrl = "https://www.pref.aichi.jp/kenmin/shohiseikatsu/education/pdf/student_guide.pdf"
+        val pdfUrl = "https://kyushucgc.co.jp/recipe_pdf/202112/recipe05.pdf"
 
         try {
             // Koogエージェント設定
