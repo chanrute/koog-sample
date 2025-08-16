@@ -189,6 +189,13 @@ class PdfRagApp {
             println("\n📋 PDFの内容を判定中: ${pdfUrl.url}")
 
             try {
+                // NOTE:
+                // 0.3.0時点ではKoogから直接PDFファイルを送信して処理できない。PDFファイルを添付する際に必要な` LLMCapability.Document`が付与されていない。
+                // そのため、PDFを一度画像に変換してLLMに送信している。
+                // ref: https://github.com/JetBrains/koog/blob/0.3.0/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt
+                //
+                // 以下のcommitから実装されているので、次のバージョンからはPDFファイルを添付して送信できるようになりそう。
+                // ref: https://github.com/JetBrains/koog/blob/38a8424467038edf46cafc262286fa15689e3f09/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt
                 val pdfBytes = pdfService.downloadPdf(pdfUrl.url)
                 val imageBytes = pdfService.convertPdfToImage(pdfBytes)
 
