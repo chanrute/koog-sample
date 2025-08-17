@@ -1,12 +1,9 @@
 package org.example
 
+import ai.koog.agents.core.tools.annotations.LLMDescription
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// LLMDescription annotation (仮のアノテーション)
-@Target(AnnotationTarget.CLASS, AnnotationTarget.PROPERTY)
-@Retention(AnnotationRetention.RUNTIME)
-annotation class LLMDescription(val value: String)
 
 /**
  * 材料を表すデータクラス
@@ -17,6 +14,7 @@ annotation class LLMDescription(val value: String)
  */
 @Serializable
 @SerialName("Ingredient")
+@LLMDescription("料理の材料")
 data class Ingredient(
     @property:LLMDescription("材料名（例：玉ねぎ、にんじん、牛肉など）")
     val name: String,

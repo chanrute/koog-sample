@@ -2,6 +2,7 @@ package org.example
 
 import kotlinx.serialization.Serializable
 import ai.koog.embeddings.base.Vector
+import ai.koog.agents.core.tools.annotations.LLMDescription
 
 /**
  * ワークフローで使用するデータ型定義
