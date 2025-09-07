@@ -210,26 +210,17 @@ class PdfRagApp {
         val validationKey = createStorageKey<PdfValidationResult>("validation")
 
         // 2. 終了ノード：レシピでない場合の処理
-        val notRecipeFinish by node<PdfUrl, RecipeExtractionResult>("not-recipe-finish") { _ ->
+        val notRecipeFinish by node<ValidatedPdfContent, RecipeExtractionResult>("not-recipe-finish") { _ ->
             println("❌ このPDFは料理のレシピではありません。処理を終了します。")
             RecipeExtractionResult(null, null)
         }
 
         // 3. ノード定義：レシピ判定（KoogのStructured Output使用）
-        val validateRecipePdf by node<PdfUrl, PdfUrl>("validate-recipe-pdf") { pdfUrl ->
+        val validateRecipePdf by node<PdfUrl, ValidatedPdfContent>("validate-recipe-pdf") { pdfUrl ->
             println("\n📋 PDFの内容を判定中: ${pdfUrl.url}")
 
             try {
-                // NOTE:
-                // 0.3.0時点ではKoogから直接PDFファイルを送信して処理できない。PDFファイルを添付する際に必要な` LLMCapability.Document`が付与されていない。
-                // そのため、PDFを一度画像に変換してLLMに送信している。
-                // ref: https://github.com/JetBrains/koog/blob/0.3.0/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt
-                //
-                // 以下のcommitから実装されているので、次のバージョンからはPDFファイルを添付して送信できるようになりそう。
-                // ref: https://github.com/JetBrains/koog/blob/38a8424467038edf46cafc262286fa15689e3f09/prompt/prompt-executor/prompt-executor-clients/prompt-executor-openai-client/src/commonMain/kotlin/ai/koog/prompt/executor/clients/openai/OpenAIModels.kt
                 val pdfBytes = pdfService.downloadPdf(pdfUrl.url)
-                val imageBytes = pdfService.convertPdfToImage(pdfBytes)
-
 
                 // Koogの構造化出力でPDF判定（Strategy内でrequestLLMStructuredを使用）
                 val validationStructure = JsonStructuredData.createJsonStructure<PdfValidationResult>(
@@ -239,19 +230,17 @@ class PdfRagApp {
                 val validation = try {
                     val result = llm.writeSession {
                         updatePrompt {
-                            user {
-                                +"添付された画像から、料理のレシピに関する情報が含まれているかを判定してください。"
-                                
-                                attachments {
-                                    image(
-                                        Attachment.Image(
-                                            content = AttachmentContent.Binary.Bytes(imageBytes),
-                                            format = "png",
-                                            fileName = "pdf_page.png"
-                                        )
+                            user(
+                                content = "添付されたPDFファイルから、料理のレシピに関する情報が含まれているかを判定してください。",
+                                attachments = listOf(
+                                    Attachment.File(
+                                        content = AttachmentContent.Binary.Bytes(pdfBytes),
+                                        format = "pdf",
+                                        mimeType = "application/pdf",
+                                        fileName = "recipe.pdf"
                                     )
-                                }
-                            }
+                                )
+                            )
                         }
                         
                         requestLLMStructured(
@@ -274,7 +263,7 @@ class PdfRagApp {
                 println("📝 理由: ${validation.reason}")
 
                 storage.set(validationKey, validation)
-                pdfUrl
+                ValidatedPdfContent(pdfUrl.url, pdfBytes, validation.isRecipe)
                 
             } catch (e: Exception) {
                 println("❌ PDF内容判定でエラーが発生: ${e.message}")
@@ -283,11 +272,10 @@ class PdfRagApp {
         }
 
         // 4. 基本的なノード群：データ処理パイプライン
-        val downloadAndExtractPdf by node<PdfUrl, PdfContent>("download-extract-pdf") { pdfUrl ->
-            println("\n📥 PDFダウンロード中: ${pdfUrl.url}")
-            val pdfBytes = pdfService.downloadPdf(pdfUrl.url)
-            val extractedText = pdfService.extractTextFromPdf(pdfBytes)
-            PdfContent(pdfBytes, extractedText)
+        val extractTextFromPdf by node<ValidatedPdfContent, PdfContent>("extract-text-from-pdf") { validatedPdf ->
+            println("\n📄 PDFからテキストを抽出中...")
+            val extractedText = pdfService.extractTextFromPdf(validatedPdf.pdfBytes)
+            PdfContent(validatedPdf.pdfBytes, extractedText)
         }
 
         val splitIntoChunks by node<PdfContent, DocumentChunks>("split-chunks") { pdfContent ->
@@ -403,22 +391,20 @@ class PdfRagApp {
 
         // 条件分岐：レシピ判定による処理分岐
         edge(
-            (validateRecipePdf forwardTo downloadAndExtractPdf)
-                onCondition { _ ->
-                    val validation = storage.getValue(validationKey)
-                    validation.isRecipe
+            (validateRecipePdf forwardTo extractTextFromPdf)
+                onCondition { validatedPdf ->
+                    validatedPdf.isValidated
                 }
         )
         edge(
             (validateRecipePdf forwardTo notRecipeFinish)
-                onCondition { _ ->
-                    val validation = storage.getValue(validationKey)
-                    !validation.isRecipe
+                onCondition { validatedPdf ->
+                    !validatedPdf.isValidated
                 }
         )
 
         // メインワークフローチェーン
-        edge(downloadAndExtractPdf forwardTo splitIntoChunks)
+        edge(extractTextFromPdf forwardTo splitIntoChunks)
         edge(splitIntoChunks forwardTo createEmbeddings)
         edge(createEmbeddings forwardTo findRelevantChunks)
         edge(findRelevantChunks forwardTo extractInParallel)

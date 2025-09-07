@@ -33,19 +33,28 @@ data class RecipeWorkflowData(
 data class PdfContent(
     val pdfBytes: ByteArray,
     val extractedText: String
+)
+
+@Serializable
+data class ValidatedPdfContent(
+    val pdfUrl: String,
+    val pdfBytes: ByteArray,
+    val isValidated: Boolean
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
-        other as PdfContent
+        other as ValidatedPdfContent
+        if (pdfUrl != other.pdfUrl) return false
         if (!pdfBytes.contentEquals(other.pdfBytes)) return false
-        if (extractedText != other.extractedText) return false
+        if (isValidated != other.isValidated) return false
         return true
     }
 
     override fun hashCode(): Int {
-        var result = pdfBytes.contentHashCode()
-        result = 31 * result + extractedText.hashCode()
+        var result = pdfUrl.hashCode()
+        result = 31 * result + pdfBytes.contentHashCode()
+        result = 31 * result + isValidated.hashCode()
         return result
     }
 }
