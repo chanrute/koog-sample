@@ -13,12 +13,12 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.Attachment
 import ai.koog.prompt.message.AttachmentContent
-import ai.koog.agents.core.agent.singleRunStrategy
-import ai.koog.prompt.params.LLMParams
 
 // Koog Structured Data API
 import ai.koog.prompt.structure.json.JsonStructuredData
-import ai.koog.prompt.structure.json.JsonSchemaGenerator
+import ai.koog.prompt.structure.StructuredOutput
+import ai.koog.prompt.structure.StructuredOutputConfig
+import ai.koog.prompt.structure.StructureFixingParser
 
 // Koog Embedding API
 import ai.koog.embeddings.local.LLMEmbedder
@@ -56,6 +56,7 @@ class PdfRagApp {
             ?: throw IllegalStateException("OPENAI_API_KEY環境変数が設定されていません")
     }
 
+
     // ==========================================
     // Koog Embedding API - 高精度なベクトル検索
     // ==========================================
@@ -66,7 +67,8 @@ class PdfRagApp {
         val lModel = LLModel(
             LLMProvider.OpenAI,
             "text-embedding-ada-002",
-            capabilities = listOf(LLMCapability.Embed)
+            capabilities = listOf(LLMCapability.Embed),
+            contextLength = 8192L
         )
         return LLMEmbedder(client, lModel)
     }
@@ -122,7 +124,7 @@ class PdfRagApp {
     // ==========================================
     
     suspend fun generateAnswerWithAgent(relevantChunks: List<String>): RecipeEntity? {
-        println("🤖 AIAgentとKoogのstructured outputを使ってRecipeEntityを抽出中...")
+        println("🤖 AIAgentのStructured Outputを使ってRecipeEntityを抽出中...")
         
         return try {
             val apiKey = getOpenAiApiKey()
@@ -131,37 +133,66 @@ class PdfRagApp {
 
             // Koogの構造化出力設定
             val recipeStructure = JsonStructuredData.createJsonStructure<RecipeEntity>(
-                schemaFormat = JsonSchemaGenerator.SchemaFormat.JsonSchema,
-                examples = exampleRecipes,
-                schemaType = JsonStructuredData.JsonSchemaType.SIMPLE
+                examples = exampleRecipes
+            )
+
+            // Strategy内でstructured outputを使用
+            val recipeExtractionStrategy = strategy<String, RecipeEntity>("recipe-extraction-strategy") {
+                val extractRecipe by node<String, RecipeEntity>("extract-recipe") { input ->
+                    llm.writeSession {
+                        updatePrompt {
+                            user("以下の文書からレシピ情報を抽出してください：\n\n$input")
+                        }
+
+                        val result = requestLLMStructured(
+                            config = StructuredOutputConfig(
+                                default = StructuredOutput.Manual(recipeStructure),
+                                fixingParser = StructureFixingParser(
+                                    fixingModel = OpenAIModels.Chat.GPT4o,
+                                    retries = 3
+                                )
+                            )
+                        )
+                        result.getOrThrow().structure
+                    }
+                }
+
+                edge(nodeStart forwardTo extractRecipe)
+                edge(extractRecipe forwardTo nodeFinish)
+            }
+
+            val agentConfig = AIAgentConfig(
+                prompt = prompt("recipe-extraction") {
+                    system("""
+                        あなたは料理レシピの専門家です。
+                        提供された文書からレシピ情報を正確に抽出してください。
+
+                        抽出する情報：
+                        - レシピ名（料理の名前）
+                        - 材料リスト（材料名、数量、単位）
+
+                        注意事項：
+                        - 数量は数値として正確に抽出してください
+                        - 単位は日本語で記載してください（グラム、個、本、カップ、大さじ、小さじなど）
+                        - 文書に記載されている情報のみを抽出してください
+                    """.trimIndent())
+                },
+                model = OpenAIModels.Chat.GPT4o,
+                maxAgentIterations = 10
             )
 
             val agent = AIAgent(
-                executor = simpleOpenAIExecutor(apiKey),
-                systemPrompt = """
-                    あなたは料理レシピの専門家です。
-                    提供された文書からレシピ情報を正確に抽出してください。
-
-                    抽出する情報：
-                    - レシピ名（料理の名前）
-                    - 材料リスト（材料名、数量、単位）
-
-                    注意事項：
-                    - 数量は数値として正確に抽出してください
-                    - 単位は日本語で記載してください（グラム、個、本、カップ、大さじ、小さじなど）
-                    - 文書に記載されている情報のみを抽出してください
-                    - 以下のJSON構造で正確に出力してください：
-
-                    ${recipeStructure.schema}
-                """.trimIndent(),
-                llmModel = OpenAIModels.Chat.GPT4o
+                promptExecutor = simpleOpenAIExecutor(apiKey),
+                strategy = recipeExtractionStrategy,
+                agentConfig = agentConfig
             )
 
-            val result = agent.run("以下の文書からレシピ情報を抽出してください：\n\n$context")
-            println("✅ AIAgent RecipeEntity抽出完了")
+            val result = agent.run(context)
+
+            println("✅ AIAgent Structured Output RecipeEntity抽出完了")
             println("抽出結果: $result")
             
-            recipeStructure.parse(result)
+            result
         } catch (e: Exception) {
             println("❌ AIAgent RecipeEntity抽出でエラーが発生: ${e.message}")
             e.printStackTrace()
@@ -199,57 +230,44 @@ class PdfRagApp {
                 val pdfBytes = pdfService.downloadPdf(pdfUrl.url)
                 val imageBytes = pdfService.convertPdfToImage(pdfBytes)
 
-                // Koogの構造化出力でPDF判定
+
+                // Koogの構造化出力でPDF判定（Strategy内でrequestLLMStructuredを使用）
                 val validationStructure = JsonStructuredData.createJsonStructure<PdfValidationResult>(
-                    schemaFormat = JsonSchemaGenerator.SchemaFormat.JsonSchema,
-                    examples = PdfValidationResult.getExampleValidations(),
-                    schemaType = JsonStructuredData.JsonSchemaType.SIMPLE
+                    examples = PdfValidationResult.getExampleValidations()
                 )
 
-                // プロンプトに画像を含めて実行
-                val promptWithImage = prompt("validation-with-image", LLMParams(temperature = 0.0)) {
-                    system("""
-                        あなたは料理レシピの専門家です。
-                        添付された画像を確認して、この文書が料理のレシピに関する内容かどうかを判断してください。
+                val validation = try {
+                    val result = llm.writeSession {
+                        updatePrompt {
+                            user {
+                                +"添付された画像から、料理のレシピに関する情報が含まれているかを判定してください。"
+                                
+                                attachments {
+                                    image(
+                                        Attachment.Image(
+                                            content = AttachmentContent.Binary.Bytes(imageBytes),
+                                            format = "png",
+                                            fileName = "pdf_page.png"
+                                        )
+                                    )
+                                }
+                            }
+                        }
                         
-                        判断基準:
-                        - 料理名、材料、作り方、調理時間などが含まれているか
-                        - 料理に関する情報が主な内容となっているか
-                       
-                        JSON以外のレスポンスを返却することは禁止されています。
-                        
-                        以下のJSON構造で正確に出力してください：
-                        `reason`は必ず日本語で理由を記載してください。
-                        
-                        ${validationStructure.schema}
-                    """.trimIndent())
-                    
-                    user {
-                        +"添付された画像から、料理のレシピに関する情報が含まれているかを判定してください。"
-                        
-                        attachments {
-                            image(
-                                Attachment.Image(
-                                    content = AttachmentContent.Binary.Bytes(imageBytes),
-                                    format = "png",
-                                    fileName = "pdf_page.png"
+                        requestLLMStructured(
+                            config = StructuredOutputConfig(
+                                default = StructuredOutput.Manual(validationStructure),
+                                fixingParser = StructureFixingParser(
+                                    fixingModel = OpenAIModels.Chat.GPT4o,
+                                    retries = 3
                                 )
                             )
-                        }
+                        )
                     }
-                }
-
-                val executor = simpleOpenAIExecutor(getOpenAiApiKey())
-                val response = executor.execute(promptWithImage, OpenAIModels.Chat.GPT4o, emptyList())
-                val result = response.first().content
-                
-                println("🔍 LLMレスポンス: $result")
-
-                val validation = try {
-                    validationStructure.parse(result)
+                    result.getOrThrow().structure
                 } catch (e: Exception) {
-                    println("❌ JSON解析エラー: ${e.message}")
-                    PdfValidationResult(true, "JSON解析に失敗したため、処理を続行します")
+                    println("❌ Strategy内PDF判定でエラーが発生: ${e.message}")
+                    PdfValidationResult(true, "PDF判定に失敗したため、処理を続行します")
                 }
 
                 println("🔍 判定結果: ${if (validation.isRecipe) "✅ レシピPDF" else "❌ レシピ以外"}")

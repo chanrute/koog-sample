@@ -38,17 +38,17 @@ dependencies {
     implementation(libs.guava)
 
         // Koog - Core framework
-    implementation("ai.koog:koog-agents:0.3.0")
-    implementation("ai.koog:embeddings-llm:0.3.0")
-    implementation("ai.koog:embeddings-base:0.3.0")
-    implementation("ai.koog:rag-base:0.3.0")
-    implementation("ai.koog:vector-storage:0.3.0")
+    implementation("ai.koog:koog-agents:0.4.1")
+    implementation("ai.koog:embeddings-llm:0.4.1")
+    implementation("ai.koog:embeddings-base:0.4.1")
+    implementation("ai.koog:rag-base:0.4.1")
+    implementation("ai.koog:vector-storage:0.4.1")
 
     // Koog Prompt API and LLM clients
-    implementation("ai.koog:prompt-executor-anthropic-client:0.3.0")
-    implementation("ai.koog:prompt-executor-openai-client:0.3.0")
-    implementation("ai.koog:prompt-llm:0.3.0")
-    implementation("ai.koog:prompt-model:0.3.0")
+    implementation("ai.koog:prompt-executor-anthropic-client:0.4.1")
+    implementation("ai.koog:prompt-executor-openai-client:0.4.1")
+    implementation("ai.koog:prompt-llm:0.4.1")
+    implementation("ai.koog:prompt-model:0.4.1")
 
     // Environment variables support
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
