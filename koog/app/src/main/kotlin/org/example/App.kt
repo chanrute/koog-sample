@@ -148,7 +148,7 @@ class PdfRagApp {
                             config = StructuredOutputConfig(
                                 default = StructuredOutput.Manual(recipeStructure),
                                 fixingParser = StructureFixingParser(
-                                    fixingModel = OpenAIModels.Chat.GPT4o,
+                                    fixingModel = OpenAIModels.Chat.GPT5Mini,
                                     retries = 3
                                 )
                             )
@@ -177,7 +177,7 @@ class PdfRagApp {
                         - 文書に記載されている情報のみを抽出してください
                     """.trimIndent())
                 },
-                model = OpenAIModels.Chat.GPT4o,
+                model = OpenAIModels.Chat.GPT5Mini,
                 maxAgentIterations = 10
             )
 
@@ -247,7 +247,7 @@ class PdfRagApp {
                             config = StructuredOutputConfig(
                                 default = StructuredOutput.Manual(validationStructure),
                                 fixingParser = StructureFixingParser(
-                                    fixingModel = OpenAIModels.Chat.GPT4o,
+                                    fixingModel = OpenAIModels.Chat.GPT5Mini,
                                     retries = 3
                                 )
                             )
@@ -431,7 +431,7 @@ fun main() {
                 prompt = prompt("recipe-extraction-prompt") {
                     system("あなたは料理レシピ分析の専門家です。PDFドキュメントから料理レシピ情報を正確に抽出し、構造化されたデータとして整理する能力を持っています。")
                 },
-                model = OpenAIModels.Chat.GPT4o,
+                model = OpenAIModels.Chat.GPT5Mini,
                 maxAgentIterations = 25
             )
 
