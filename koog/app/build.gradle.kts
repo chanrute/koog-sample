@@ -47,17 +47,30 @@ dependencies {
     // Koog Prompt API and LLM clients
     implementation("ai.koog:prompt-executor-anthropic-client:0.4.1")
     implementation("ai.koog:prompt-executor-openai-client:0.4.1")
+    implementation("ai.koog:prompt-executor-deepseek-client:0.4.1")
     implementation("ai.koog:prompt-llm:0.4.1")
     implementation("ai.koog:prompt-model:0.4.1")
+    
+    // Koog Ktor Integration
+    implementation("ai.koog:koog-ktor:0.4.1")
 
     // Environment variables support
     implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
 
     // HTTP client for PDF download and API calls
-    implementation("io.ktor:ktor-client-core:2.3.7")
-    implementation("io.ktor:ktor-client-cio:2.3.7")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.7")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
+    implementation("io.ktor:ktor-client-core:3.0.2")
+    implementation("io.ktor:ktor-client-cio:3.0.2")
+    implementation("io.ktor:ktor-client-content-negotiation:3.0.2")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.0.2")
+
+    // Ktor Server dependencies
+    implementation("io.ktor:ktor-server-core:3.0.2")
+    implementation("io.ktor:ktor-server-netty:3.0.2")
+    implementation("io.ktor:ktor-server-freemarker:3.0.2")
+    implementation("io.ktor:ktor-server-html-builder:3.0.2")
+    implementation("io.ktor:ktor-server-content-negotiation:3.0.2")
+    implementation("io.ktor:ktor-server-call-logging:3.0.2")
+    implementation("io.ktor:ktor-server-status-pages:3.0.2")
 
     // JSON serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
@@ -77,8 +90,35 @@ java {
 }
 
 application {
-    // Define the main class for the application.
+    // Define the main class for the application (App.kt for CLI/Koog tasks).
     mainClass = "org.example.AppKt"
+}
+
+// Custom task to run the Ktor web server (Application.kt)
+tasks.register<JavaExec>("webRun") {
+    group = "application"
+    description = "Run the Ktor web server (Application.kt)"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.example.ApplicationKt")
+}
+
+// Background version of webRun
+tasks.register<JavaExec>("webStart") {
+    group = "application"
+    description = "Start the Ktor web server in background"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("org.example.ApplicationKt")
+    
+    // Configure for background execution
+    standardOutput = System.out
+    errorOutput = System.err
+}
+
+// Alias for webRun to match the requested command format
+tasks.register("web") {
+    group = "application"
+    description = "Run the Ktor web server (alias for webRun)"
+    dependsOn("webRun")
 }
 
 tasks.named<Test>("test") {
