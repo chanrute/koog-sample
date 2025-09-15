@@ -810,3 +810,24 @@ build
 
 # Claude Code
 .claude
+
+# Kotlin Multiplatform specific
+.kotlin/
+*.klib
+
+# iOS/Xcode specific
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+*.xcscheme
+*.xcschememanagement.plist
+DerivedData/
+build/
+
+# Additional IDE exclusions for kmp-chat
+koog/kmp-chat/.idea/
+koog/kmp-chat/.kotlin/
+
+# Override .idea exclusions for kmp-chat (force ignore everything)
+koog/kmp-chat/.idea/*
+!koog/kmp-chat/.idea/.gitkeep
